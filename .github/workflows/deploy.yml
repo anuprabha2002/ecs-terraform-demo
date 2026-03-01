@@ -1,0 +1,57 @@
+name: ECS Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: ecs-demo-repo
+  ECS_CLUSTER: ecs-demo-cluster
+  ECS_SERVICE: ecs-demo-service
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      run: |
+        aws ecr get-login-password --region $AWS_REGION \
+        | docker login --username AWS \
+        --password-stdin 750761633063.dkr.ecr.ap-south-1.amazonaws.com
+
+    - name: Build Docker Image
+      run: |
+        docker buildx build \
+        --platform linux/amd64 \
+        -t ecs-demo-repo:latest \
+        --load .
+
+    - name: Tag Image
+      run: |
+        docker tag ecs-demo-repo:latest \
+        750761633063.dkr.ecr.ap-south-1.amazonaws.com/ecs-demo-repo:latest
+
+    - name: Push Image to ECR
+      run: |
+        docker push \
+        750761633063.dkr.ecr.ap-south-1.amazonaws.com/ecs-demo-repo:latest
+
+    - name: Deploy to ECS
+      run: |
+        aws ecs update-service \
+          --cluster ecs-demo-cluster \
+          --service ecs-demo-service \
+          --force-new-deployment
